@@ -1,0 +1,205 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Live Chart</title>
+    <script src="./js/mqttwebsoc.min.js"></script>
+
+    <script>
+        window.onload = function () {
+            // Initialize the chart
+            var chart = new CanvasJS.Chart("chartContainer", {
+                title: {
+                    text: "Live Multi-Line Chart (Retain All Data)"
+                },
+                axisX: {
+                    title: "Time",
+                    valueFormatString: "HH:mm:ss",
+                    labelAngle: -50
+                },
+                axisY: {
+                    title: "Value",
+                    includeZero: false
+                },
+                data: [
+                    {
+                        type: "line",
+                        name: "Line 1",
+                        showInLegend: true,
+                        dataPoints: []
+                    },
+                    {
+                        type: "line",
+                        name: "Line 2",
+                        showInLegend: true,
+                        dataPoints: []
+                    },
+                    {
+                        type: "line",
+                        name: "Line 3",
+                        showInLegend: true,
+                        dataPoints: []
+                    }
+                ]
+            });
+
+            // Render the chart initially
+            chart.render();
+
+            // Function to generate a random value
+            function getRandomValue() {
+                return Math.floor(Math.random() * 100); // Random Y value
+            }
+
+            // Function to get the current time
+            function getCurrentTime() {
+                return new Date(); // X-axis timestamp
+            }
+
+            // Function to add data to a specific line
+            function addDataToLine(lineIndex, Yvalue) {
+                var dataPoint = {
+                    x: getCurrentTime(),
+                    y: Yvalue
+                };
+
+                // Add the new data point to the selected line's dataPoints array
+                chart.options.data[lineIndex].dataPoints.push(dataPoint);
+
+                // Update the chart
+                chart.render();
+            }
+
+            // Button click handlers to add data to different lines
+            document.getElementById("addData1").addEventListener("click", function () {
+                addDataToLine(0, 10); // Add data to Line 1
+            });
+
+            document.getElementById("addData2").addEventListener("click", function () {
+                addDataToLine(1, 20); // Add data to Line 2
+            });
+
+            document.getElementById("addData3").addEventListener("click", function () {
+                addDataToLine(2, 30); // Add data to Line 3
+            });
+
+
+
+            var ip = "mqtt.example.lk";
+            var port = "1887";
+            var usessl = true;
+            var id = (((1 + Math.random()) * 0x10000) | 0).toString(16).substring(1);
+            var username = '***********';
+            var password = '*******';
+            var message, client;
+            var connected = false;
+            var widgetRepository = {}; //property names are datastreams(keys), values are widget objects
+
+
+
+            connectMQTT();
+
+
+            function connectMQTT() {
+                client = new Paho.MQTT.Client(ip, Number(port), id);
+                client.onConnectionLost = onConnectionLost;
+                client.onMessageArrived = onMessageArrived;
+                client.connect({
+                    userName: username,
+                    password: password,
+                    useSSL: usessl,
+                    onSuccess: onConnect,
+                    onFailure: onFailure,
+                    reconnect: true
+                });
+            }
+
+            function onConnect() {
+                console.log("Connected to server");
+
+                connected = true;
+
+                client.subscribe("sub/topics/#", 0);
+
+
+                //each key is a datastream which is subscribed
+                // Object.keys(widgetRepository).forEach(function(datastream,index) {
+                //     client.subscribe(datastream, {
+                //         qos: 0
+                //     });
+                // });
+            }
+
+            function onMessageArrived(message) {
+                try {
+                    console.log("Recieved Message from server");
+                    var value = message.payloadString;
+                    var datastream = message.destinationName;
+                    // console.log("datastream: " + datastream + ", value: " + value);
+
+
+                    devideAndDraw(datastream, JSON.parse(value))
+                    // client.publish("test","ok");
+
+                } catch (e) {
+                    console.log("exception in onMessageArrived: " + e);
+                    return false;
+                }
+            }
+
+            function devideAndDraw(topic, message) {
+                deviceId = topic.split("/")[2]
+                value = message["voltage"]
+                console.log(deviceId + " " + value)
+                addDataToLine(parseInt(deviceId, 10), parseInt(value, 10))
+            }
+
+            function onConnectionLost(responseObject) {
+                if (responseObject.errorCode !== 0) {
+                    console.log("onConnectionLost:" + responseObject.errorMessage);
+                }
+            }
+
+
+            function onFailure(responseObject) {
+
+                connected = false;
+
+                if (responseObject.errorCode === 8) {
+                    console.log("onFailure errorCode/errorMessage: " + responseObject.errorCode + "/" + responseObject.errorMessage);
+                    // $("#validateHeader").text("Invalid Username/Password. Please enter again.");
+
+                } else if (responseObject.errorCode === 7) {
+                    console.log("onFailure errorCode/errorMessage: " + responseObject.errorCode + "/" + responseObject.errorMessage);
+                    // $("#validateHeader").html("New SSL Certificate added. Import SSL Certificate.");
+
+                } else if (responseObject.errorCode !== 0 && responseObject.errorCode !== 8 && responseObject.errorCode !== 7) {
+                    console.log("onFailure errorCode/errorMessage: " + responseObject.errorCode + "/" + responseObject.errorMessage);
+                    // $("#validateHeader").text("Contact Administrator.");
+
+                }
+
+
+                client = null;
+                setTimeout(connectMQTT, 10000);
+
+            }
+
+
+
+        };
+    </script>
+
+</head>
+<body>
+    <div id="chartContainer" style="height: 400px; width: 100%;"></div>
+<div>
+    <button id="addData1">Add Data to Line 1</button>
+    <button id="addData2">Add Data to Line 2</button>
+    <button id="addData3">Add Data to Line 3</button>
+</div>
+
+    <script src="https://canvasjs.com/assets/script/canvasjs.min.js"></script>
+</body>
+</html>
